@@ -1,4 +1,4 @@
-import { Locator, Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { BasePage } from './base-page';
 
 export class PlaywrightInstallationPage extends BasePage {
@@ -11,5 +11,9 @@ export class PlaywrightInstallationPage extends BasePage {
 
   async isInstallationHeadingVisible(): Promise<boolean> {
     return this.installationHeading.isVisible();
+  }
+
+  async expectInstallationHeadingVisible() {
+    await expect(this.installationHeading).toBeVisible();
   }
 }

@@ -1,45 +1,71 @@
-import { Page, BrowserContext, test as base } from '@playwright/test';
-import { test, TestFixtures } from './fixtures';
+import { test, type TestFixtures } from './fixtures';
 
 /**
- * Extended fixtures for advanced scenarios
- * Build on top of base fixtures to add custom functionality
+ * Opt-in fixtures for advanced scenarios, built on top of the base `test`.
+ *
+ * - `apiClient` is production-ready (checks response status, tolerates non-JSON).
+ * - `authenticate`, `db`, and `dataFactory` are EXAMPLE STUBS that show the
+ *   shape of such fixtures. Replace their bodies with your real selectors /
+ *   client libraries before relying on them.
  */
 
-/**
- * API client fixture interface
- */
+/** Result of an API call: HTTP status plus parsed body (JSON when possible). */
+export interface ApiResponse<T = unknown> {
+  ok: boolean;
+  status: number;
+  body: T;
+}
+
+export interface ApiClient {
+  get<T = unknown>(url: string, headers?: Record<string, string>): Promise<ApiResponse<T>>;
+  post<T = unknown>(
+    url: string,
+    data?: unknown,
+    headers?: Record<string, string>,
+  ): Promise<ApiResponse<T>>;
+  put<T = unknown>(
+    url: string,
+    data?: unknown,
+    headers?: Record<string, string>,
+  ): Promise<ApiResponse<T>>;
+  delete<T = unknown>(url: string, headers?: Record<string, string>): Promise<ApiResponse<T>>;
+}
+
 interface APIClientFixture extends TestFixtures {
-  apiClient: {
-    get(url: string, headers?: Record<string, string>): Promise<any>;
-    post(url: string, data?: any, headers?: Record<string, string>): Promise<any>;
-    put(url: string, data?: any, headers?: Record<string, string>): Promise<any>;
-    delete(url: string, headers?: Record<string, string>): Promise<any>;
-  };
+  apiClient: ApiClient;
 }
 
 /**
- * Example: API client fixture
- * Provides a way to make API calls with authentication
+ * API client fixture — makes requests through the test's browser context so
+ * cookies/auth are shared with the UI session.
  */
 export const testWithAPI = test.extend<APIClientFixture>({
   apiClient: async ({ context }, use) => {
-    const client = {
-      async get(url: string, headers?: Record<string, string>) {
-        const response = await context.request.get(url, { headers });
-        return response.json();
+    async function parse<T>(
+      response: import('@playwright/test').APIResponse,
+    ): Promise<ApiResponse<T>> {
+      const text = await response.text();
+      let body: unknown = text;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch {
+        // Non-JSON response — keep the raw text.
+      }
+      return { ok: response.ok(), status: response.status(), body: body as T };
+    }
+
+    const client: ApiClient = {
+      async get(url, headers) {
+        return parse(await context.request.get(url, { headers }));
       },
-      async post(url: string, data?: any, headers?: Record<string, string>) {
-        const response = await context.request.post(url, { data, headers });
-        return response.json();
+      async post(url, data, headers) {
+        return parse(await context.request.post(url, { data, headers }));
       },
-      async put(url: string, data?: any, headers?: Record<string, string>) {
-        const response = await context.request.put(url, { data, headers });
-        return response.json();
+      async put(url, data, headers) {
+        return parse(await context.request.put(url, { data, headers }));
       },
-      async delete(url: string, headers?: Record<string, string>) {
-        const response = await context.request.delete(url, { headers });
-        return response;
+      async delete(url, headers) {
+        return parse(await context.request.delete(url, { headers }));
       },
     };
 
@@ -48,224 +74,82 @@ export const testWithAPI = test.extend<APIClientFixture>({
 });
 
 /**
- * Authentication fixture interface
+ * Authentication fixture (EXAMPLE STUB).
+ * Replace selectors/URLs with your application's real login flow.
  */
 interface AuthFixture extends TestFixtures {
   authenticate: {
     loginWith(email: string, password: string): Promise<void>;
     logout(): Promise<void>;
-    getAuthToken(): Promise<string>;
   };
 }
 
-/**
- * Example: Authentication fixture
- * Handles login and session management
- */
 export const testWithAuth = test.extend<AuthFixture>({
   authenticate: async ({ page }, use) => {
-    const auth = {
+    await use({
       async loginWith(email: string, password: string) {
-        console.log(`[Auth] Logging in with email: ${email}`);
         await page.goto('/login');
-        await page.fill('input[type="email"]', email);
-        await page.fill('input[type="password"]', password);
-        await page.click('button[type="submit"]');
+        await page.getByLabel(/email/i).fill(email);
+        await page.getByLabel(/password/i).fill(password);
+        await page.getByRole('button', { name: /sign in|log in|submit/i }).click();
         await page.waitForURL('**/dashboard');
-        console.log(`[Auth] Logged in successfully`);
       },
       async logout() {
-        console.log(`[Auth] Logging out`);
-        await page.click('[data-testid="logout-button"]');
+        await page.getByTestId('logout-button').click();
         await page.waitForURL('**/login');
-        console.log(`[Auth] Logged out successfully`);
       },
-      async getAuthToken(): Promise<string> {
-        const token = await page.context().request.get('/api/auth/token');
-        return token.headers()['authorization'] || '';
-      },
-    };
-
-    await use(auth);
+    });
   },
 });
 
 /**
- * Database fixture interface
- */
-interface DBFixture extends TestFixtures {
-  db: {
-    query(sql: string): Promise<any[]>;
-    seedData(table: string, data: any[]): Promise<void>;
-    clearTable(table: string): Promise<void>;
-    closeConnection(): Promise<void>;
-  };
-}
-
-/**
- * Example: Database fixture
- * Provides database access for setup/teardown
- */
-export const testWithDB = test.extend<DBFixture>({
-  db: async ({}, use) => {
-    // Initialize database connection
-    console.log('[DB] Connecting to database...');
-    
-    const db = {
-      async query(sql: string) {
-        console.log(`[DB] Executing: ${sql}`);
-        // Replace with actual DB library
-        return [];
-      },
-      async seedData(table: string, data: any[]) {
-        console.log(`[DB] Seeding ${data.length} rows into ${table}`);
-        // Seed data
-      },
-      async clearTable(table: string) {
-        console.log(`[DB] Clearing table: ${table}`);
-        // Clear table
-      },
-      async closeConnection() {
-        console.log('[DB] Closing connection');
-        // Close connection
-      },
-    };
-
-    await use(db);
-
-    // Cleanup
-    await db.closeConnection();
-  },
-});
-
-/**
- * Data factory fixture interface
+ * Test-data factory fixture (EXAMPLE STUB).
+ * Uses a deterministic incrementing id rather than Math.random().
  */
 interface DataFactoryFixture extends TestFixtures {
   dataFactory: {
-    createUser(overrides?: Partial<any>): any;
-    createProduct(overrides?: Partial<any>): any;
-    createOrder(overrides?: Partial<any>): any;
+    createUser(overrides?: Record<string, unknown>): Record<string, unknown>;
+    createProduct(overrides?: Record<string, unknown>): Record<string, unknown>;
   };
 }
 
-/**
- * Example: Test data fixture
- * Provides factory methods for creating test data
- */
 export const testWithData = test.extend<DataFactoryFixture>({
   dataFactory: async ({}, use) => {
-    const factory = {
-      createUser(overrides?: Partial<any>) {
+    let seq = 0;
+    const nextId = () => ++seq;
+
+    await use({
+      createUser(overrides) {
+        const id = nextId();
         return {
-          id: Math.random(),
-          email: `user${Math.random()}@example.com`,
+          id,
+          email: `user${id}@example.com`,
           firstName: 'Test',
           lastName: 'User',
           ...overrides,
         };
       },
-      createProduct(overrides?: Partial<any>) {
+      createProduct(overrides) {
+        const id = nextId();
         return {
-          id: Math.random(),
-          name: 'Test Product',
+          id,
+          name: `Test Product ${id}`,
           price: 99.99,
           description: 'A test product',
           ...overrides,
         };
       },
-      createOrder(overrides?: Partial<any>) {
-        return {
-          id: Math.random(),
-          userId: Math.random(),
-          items: [],
-          total: 0,
-          status: 'pending',
-          ...overrides,
-        };
-      },
-    };
-
-    await use(factory);
-  },
-});
-
-/**
- * Complete fixture interface
- */
-interface CompleteFixture extends TestFixtures {
-  apiClient: {
-    get(url: string, headers?: Record<string, string>): Promise<any>;
-    post(url: string, data?: any, headers?: Record<string, string>): Promise<any>;
-  };
-  authenticate: {
-    login(email: string, password: string): Promise<void>;
-  };
-  dataFactory: {
-    createUser(overrides?: any): any;
-  };
-}
-
-/**
- * Combine multiple fixtures
- * Create a comprehensive test fixture with all features
- */
-export const testComplete = test.extend<CompleteFixture>({
-  apiClient: async ({ context }, use) => {
-    const client = {
-      async get(url: string, headers?: Record<string, string>) {
-        const response = await context.request.get(url, { headers });
-        return response.json();
-      },
-      async post(url: string, data?: any, headers?: Record<string, string>) {
-        const response = await context.request.post(url, { data, headers });
-        return response.json();
-      },
-    };
-    await use(client);
-  },
-
-  authenticate: async ({ page }, use) => {
-    const auth = {
-      async login(email: string, password: string) {
-        await page.fill('input[type="email"]', email);
-        await page.fill('input[type="password"]', password);
-        await page.click('button[type="submit"]');
-        await page.waitForURL('**/dashboard');
-      },
-    };
-    await use(auth);
-  },
-
-  dataFactory: async ({}, use) => {
-    const factory = {
-      createUser: (overrides?: any) => ({
-        email: `user${Math.random()}@example.com`,
-        ...overrides,
-      }),
-    };
-    await use(factory);
+    });
   },
 });
 
 /**
  * Example usage:
- * 
- * import { testWithAPI, testWithAuth, testComplete } from '../hooks/extended-fixtures';
- * 
- * testWithAPI('api test', async ({ page, apiClient }) => {
- *   const data = await apiClient.get('https://api.example.com/data');
- *   expect(data).toBeDefined();
- * });
- * 
- * testWithAuth('auth test', async ({ page, authenticate }) => {
- *   await authenticate.loginWith('user@example.com', 'password');
- *   // test code
- * });
- * 
- * testComplete('complete test', async ({ page, apiClient, authenticate, dataFactory }) => {
- *   const user = dataFactory.createUser();
- *   await authenticate.login(user.email, 'password');
- *   // test code
- * });
+ *
+ *   import { testWithAPI } from '../hooks/extended-fixtures';
+ *
+ *   testWithAPI('api test', async ({ apiClient }) => {
+ *     const res = await apiClient.get('https://api.example.com/data');
+ *     expect(res.ok).toBeTruthy();
+ *   });
  */

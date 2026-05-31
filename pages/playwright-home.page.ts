@@ -1,4 +1,4 @@
-import { Locator, Page } from '@playwright/test';
+import { type Locator, type Page } from '@playwright/test';
 import { BasePage } from './base-page';
 import { BASE_URL } from '../hooks/env';
 import { PlaywrightInstallationPage } from './playwright-installation.page';
@@ -16,10 +16,9 @@ export class PlaywrightHomePage extends BasePage {
   }
 
   async clickGetStarted(): Promise<PlaywrightInstallationPage> {
-    await Promise.all([
-      this.page.waitForLoadState('networkidle'),
-      this.getStartedLink.click(),
-    ]);
+    // Auto-waiting handles navigation; the returned page object's web-first
+    // assertions confirm the destination is ready.
+    await this.getStartedLink.click();
     return new PlaywrightInstallationPage(this.page);
   }
 }
