@@ -28,7 +28,7 @@ test.describe('Data-driven: LoginData sheet', () => {
     expect(loginRows.length).toBeGreaterThan(0);
   });
 
-  test('every login row drives a flow', async ({ homePage }) => {
+  test('every login row drives a flow', async ({ homePage, installationPage }) => {
     await homePage.open();
 
     for (const row of loginRows) {
@@ -61,6 +61,7 @@ test.describe('Data-driven: SearchData sheet', () => {
     for (const row of searchRows) {
       expect(row.searchTerm).toBeTruthy();
       expect(row.expectedResult).toBeTruthy();
+      expect(['found', 'not found']).toContain(row.expectedResult);
     }
   });
 });

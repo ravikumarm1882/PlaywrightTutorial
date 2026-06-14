@@ -18,7 +18,7 @@ export class PlaywrightHomePage extends BasePage {
   async clickGetStarted(): Promise<PlaywrightInstallationPage> {
     // Auto-waiting handles navigation; the returned page object's web-first
     // assertions confirm the destination is ready.
-    await this.getStartedLink.click();
+    await this.getStartedLink.click();    
     return new PlaywrightInstallationPage(this.page);
   }
 }
